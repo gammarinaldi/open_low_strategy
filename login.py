@@ -1,8 +1,8 @@
 import requests
 
-def call(user):
+def call(email, password):
     try:
-        url = f"https://api.stockbit.com/v2.4/login?user={user['email']}&password={user['password']}"
+        url = f"https://api.stockbit.com/v2.4/login?user={email}&password={password}"
 
         payload={}
         headers = {}
