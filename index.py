@@ -15,7 +15,8 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from math import floor
 
-enable_order = 1
+enable_buy = 0
+enable_sell = 1
 
 today = date.today()
 email = users.list[0]
@@ -34,7 +35,42 @@ def tick(price):
     else: 
         return 25
 
-def execute_open_low(access_token, symbol):
+def send_buy_order(access_security_token, symbol, buy_price, shares):
+    res = buy.call(access_security_token, symbol, buy_price, shares)
+    if res.status_code == 200:
+        data = res.json()
+        msg = data["message"]
+        order_id = data["data"]["orderid"]
+        print(f"{symbol}: {msg} with order id: {order_id}")
+    else:
+        print("HTTP error: buy")
+        print(res.text)
+
+def send_sell_order(access_security_token, symbol, ask_price):
+    res = portfolio.call(access_security_token)
+    if res.status_code == 200:
+        data = res.json()
+        porto_dicts = data["data"]["result"]
+        dict = [i for i in porto_dicts if i["symbol"] == symbol]
+        if dict != []:
+            shares = dict[0]["available_lot"] * 100
+            sell_price = ask_price + (tick(ask_price) * 3)
+            res = sell.call(access_security_token, symbol, sell_price, shares)
+            if res.status_code == 200:
+                data = res.json()
+                msg = data["message"]
+                order_id = data["data"]["orderid"]
+                print(f"{symbol}: {msg} with order id: {order_id}")
+            else:
+                print("HTTP error: sell")
+                print(res.text)
+        else:
+            print(f"{symbol}: not exists in portfolio")
+    else:
+        print("HTTP error: portfolio")
+        print(res.text)
+
+def execute_open_low(access_token, access_security_token, symbol):
     res = stock_info.call(access_token, symbol)
     if res.status_code == 200:
         data = res.json()
@@ -72,57 +108,13 @@ def execute_open_low(access_token, symbol):
 
                 if open == low and total_bids > total_asks and open > prev and value > 1_000_000_000:
                     write_to_csv.call(symbol, today, prev, open, low, value, change)
-                    if enable_order == 1:
-                        buy_price = ask["price1"]
-                        amount = 1_000_000
-                        shares = floor(( amount / float(buy_price)))
-                        res = get_security_token.call(access_token)
-                        if res.status_code == 200:
-                            data = res.json()
-                            res = login_security.call(pin, data["data"]["token"])
-                            if res.status_code == 200:
-                                data = res.json()
-                                access_security_token = "Bearer " + data["data"]["access_token"]
-                                res = buy.call(access_security_token, symbol, buy_price, shares)
-                                if res.status_code == 200:
-                                    data = res.json()
-                                    msg = data["message"]
-                                    order_id = data["data"]["orderid"]
-                                    print(f"{symbol}: {msg} with order id: {order_id}")
-
-                                    time.sleep(180) # delay 3 minutes
-
-                                    res = portfolio.call(access_security_token)
-                                    if res.status_code == 200:
-                                        data = res.json()
-                                        porto_dicts = data["data"]["result"]
-                                        dict = [i for i in porto_dicts if i["symbol"] == symbol]
-                                        if dict != []:
-                                            shares = int(dict[0]["available_lot"])
-                                            sell_price = ask["price1"] + (tick(ask["price1"]) * 3)
-                                            res = sell.call(access_security_token, symbol, sell_price, shares)
-                                            if res.status_code == 200:
-                                                data = res.json()
-                                                msg = data["data"]["message"]
-                                                order_id = data["data"]["orderid"]
-                                                print(f"{symbol}: {msg} with order id: {order_id}")
-                                            else:
-                                                print("HTTP error: sell")
-                                                print(res.text)
-                                        else:
-                                            print(f"{symbol}: not exists in portfolio")
-                                    else:
-                                        print("HTTP error: portfolio")
-                                        print(res.text)
-                                else:
-                                    print("HTTP error: buy")
-                                    print(res.text)
-                            else:
-                                print("HTTP error: login_security")
-                                print(res.text)
-                        else:
-                            print("HTTP error: get_security_token")
-                            print(res.text)
+                    buy_price = ask["price1"]
+                    # amount = 1_000_000
+                    # shares = floor(( amount / float(buy_price)))
+                    shares = 100
+                    if enable_buy == 1: send_buy_order(access_security_token, symbol, buy_price, shares)
+                    time.sleep(180) # delay 3 minutes
+                    if enable_sell == 1: send_sell_order(access_security_token, symbol, ask["price1"])
             except:
                 print("Error is here: " + symbol)
                 print("Error traceback:")
@@ -133,9 +125,9 @@ def execute_open_low(access_token, symbol):
         print("HTTP error")
         print(res.text)
 
-def async_screening(access_token):
+def async_screening(access_token, access_security_token):
     with ThreadPoolExecutor(max_workers=10) as executor:
-        future_to_user = executor_submit(access_token, executor)
+        future_to_user = executor_submit(access_token, access_security_token, executor)
         for future in concurrent.futures.as_completed(future_to_user):
             try:
                 if future.result() != None:
@@ -147,17 +139,31 @@ def async_screening(access_token):
                 print(traceback.format_exc())
 
 def executor_submit(access_token, executor):
-        return {executor.submit(execute_open_low, access_token, symbol): symbol for symbol in stock_all.list}
+        return {executor.submit(execute_open_low, access_token, access_security_token, symbol): symbol for symbol in stock_all.list}
 
 if __name__ == '__main__':
     t1 = time.time()
     res = login.call(email, password)
-
     if res.status_code == 200:
         data = res.json()
         access_token = "Bearer " + data["data"]["access_token"]
-        # async_screening(access_token)
-        execute_open_low(access_token, "SAME")
+        res = get_security_token.call(access_token)
+        if res.status_code == 200:
+            data = res.json()
+            res = login_security.call(pin, data["data"]["token"])
+            if res.status_code == 200:
+                data = res.json()
+                access_security_token = "Bearer " + data["data"]["access_token"]
+                # async_screening(access_token, access_security_token)
+                # execute_open_low(access_token, access_security_token, "SAME")
+                # send_buy_order(access_security_token, "GOTO", 80, 100)
+                send_sell_order(access_security_token, "GOTO", 95)
+            else:
+                print("HTTP error: login_security")
+                print(res.text)
+        else:
+            print("HTTP error: get_security_token")
+            print(res.text)
     else:
         print("HTTP error")
         print(res.text)
