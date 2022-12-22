@@ -110,10 +110,10 @@ def get_prev_data():
         
 def execute_open_low(access_token, access_security_token, symbol):
     res = stock_info.call(access_token, symbol, proxies)
-    if res.status_code == 200:
-        try:
+    try:
+        if res.status_code == 200:
             data = res.json()
-            if data == None:
+            if data["data"] == None:
                 print(symbol + ": No data")
             else:
                 symbol = data["data"]["symbol"]
@@ -165,17 +165,17 @@ def execute_open_low(access_token, access_security_token, symbol):
                                 if enable_buy == 1: 
                                     send_buy_order(access_security_token, symbol, buy_price, shares)
 
-                    print(symbol + ": done")
-        except:
+                    # print(symbol + ": done")
+        else:
+            print(symbol + ": HTTP error")
+            print(res.text)
+    except:
             save_failed(symbol)
             print(symbol + ": Exception error")
             print("Error traceback:")
             print(traceback.format_exc())
-            print("Response data:")
-            print(data)
-    else:
-        print(symbol + ": HTTP error")
-        print(res.text)
+            print("Response:")
+            print(res)
 
 def save_result(symbol, date, o, l, prev_low, value, freq, change):
     with open('open_low_result.csv', 'a', newline='', encoding='utf-8') as f:
@@ -208,8 +208,6 @@ def async_screening(access_token, access_security_token):
 if __name__ == '__main__':
     print("Start strategy: open == low")
     t1 = time.time()
-    try: os.remove("open_low_result.csv") 
-    except: print("Cleaning open_low_result.csv: File doesn't exist")
     print("Using proxies: " + proxies["http"])
 
     get_prev_data()
@@ -228,6 +226,9 @@ if __name__ == '__main__':
                 print("Login to Stockbit success")
 
                 async_screening(access_token, access_security_token)
+                # execute_open_low(access_token, access_security_token, "JTPE")
+                # send_buy_order(access_security_token, "GOTO", 80, 100)
+                # send_sell_order(access_security_token, "GOTO", 95)
 
                 if enable_sell == 1:
                     time.sleep(180)
@@ -240,10 +241,6 @@ if __name__ == '__main__':
                                 ask_price = int(row[7])
                                 send_sell_order(access_security_token, symbol, ask_price)
                         file.close()
-
-                # execute_open_low(access_token, access_security_token, "ACST")
-                # send_buy_order(access_security_token, "GOTO", 80, 100)
-                # send_sell_order(access_security_token, "GOTO", 95)
             else:
                 print("HTTP error: login_security")
                 print(res.text)

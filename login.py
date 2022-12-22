@@ -6,7 +6,6 @@ def call(email, password, proxies):
 
         payload={}
         headers = {}
-        breakpoint()
         response = requests.request("POST", url, headers=headers, data=payload, proxies=proxies)
 
         return response
