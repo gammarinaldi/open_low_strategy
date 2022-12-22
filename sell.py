@@ -1,7 +1,7 @@
 import requests
 import time
 
-def call(access_token_sekuritas, symbol, price, shares):
+def call(access_token_sekuritas, symbol, price, shares, proxies):
     try:
         url = "https://trading.masonline.id/order/sell"
         ts = round(time.time()*1000)
@@ -24,7 +24,7 @@ def call(access_token_sekuritas, symbol, price, shares):
             'sec-ch-ua-platform': '"macOS"'
         }
 
-        response = requests.request("POST", url, headers=headers, data=payload)
+        response = requests.request("POST", url, headers=headers, data=payload, proxies=proxies)
 
         return response
     except requests.exceptions.HTTPError as errh:

@@ -2,7 +2,6 @@ import users
 import login
 import stock_info
 import stock_all
-import write_to_csv
 import concurrent.futures
 import traceback
 import time
@@ -11,17 +10,34 @@ import login_security
 import buy
 import sell
 import portfolio
+import csv
+import os
+import requests
+import json
 from concurrent.futures import ThreadPoolExecutor
-from datetime import date
+from datetime import date, timedelta
 from math import floor
+from dotenv import load_dotenv
+
+load_dotenv()
+
+params = dict(apiKey=os.getenv('PROXY_ROTATOR_KEY'))
+resp = requests.get(url=os.getenv('PROXY_ROTATOR_URL'), params=params)
+resp_text = json.loads(resp.text)
+proxies = {
+   "http": f"http://{resp_text['proxy']}"
+}
 
 enable_buy = 0
-enable_sell = 1
+enable_sell = 0
 
 today = date.today()
+yesterday = (today - timedelta(days=1)).strftime('%Y-%m-%d')
 email = users.list[0]
 password = users.list[1]
 pin = users.list[2]
+
+prev_list = []    
 
 def tick(price):
     if price <= 200: 
@@ -36,7 +52,7 @@ def tick(price):
         return 25
 
 def send_buy_order(access_security_token, symbol, buy_price, shares):
-    res = buy.call(access_security_token, symbol, buy_price, shares)
+    res = buy.call(access_security_token, symbol, buy_price, shares, proxies)
     if res.status_code == 200:
         data = res.json()
         msg = data["message"]
@@ -47,7 +63,7 @@ def send_buy_order(access_security_token, symbol, buy_price, shares):
         print(res.text)
 
 def send_sell_order(access_security_token, symbol, ask_price):
-    res = portfolio.call(access_security_token)
+    res = portfolio.call(access_security_token, proxies)
     if res.status_code == 200:
         data = res.json()
         porto_dicts = data["data"]["result"]
@@ -55,7 +71,7 @@ def send_sell_order(access_security_token, symbol, ask_price):
         if dict != []:
             shares = dict[0]["available_lot"] * 100
             sell_price = ask_price + (tick(ask_price) * 3)
-            res = sell.call(access_security_token, symbol, sell_price, shares)
+            res = sell.call(access_security_token, symbol, sell_price, shares, proxies)
             if res.status_code == 200:
                 data = res.json()
                 msg = data["message"]
@@ -70,64 +86,115 @@ def send_sell_order(access_security_token, symbol, ask_price):
         print("HTTP error: portfolio")
         print(res.text)
 
-def execute_open_low(access_token, access_security_token, symbol):
-    res = stock_info.call(access_token, symbol)
-    if res.status_code == 200:
-        data = res.json()
-        symbol = data["data"]["symbol"]
-        open = data["data"]["open"]
-        low = data["data"]["low"]
-        value = data["data"]["value"]
-        prev = data["data"]["previous"]
-        change = data["data"]["percentage_change"]
+def is_empty_csv(path):
+    with open(path) as csvfile:
+        reader = csv.reader(csvfile)
+        for i, _ in enumerate(reader):
+            if i:  # Found the second row
+                return False
+    return True
 
-        bids = []
-        asks = []
-        bid = data["data"]["bid"]
-        ask = data["data"]["offer"]
+def get_prev_data():
+    path = r"C:\Users\Gama\Downloads\GamaTradingSystem\idx_updater_all\merged\result.csv"
+    
+    with open(path, "r") as file:
+        csvreader = csv.reader(file)
+        if is_empty_csv(path) == False:
+            next(csvreader, None) # Skip first row (header)
+            for row in csvreader:
+                prev_date = row[1]
+                prev_symbol = row[2]
+                prev_low = row[5]
+                prev_list.append([prev_symbol, prev_date, prev_low])
+        file.close()
         
-        if bid is None or ask is None:
-            print(symbol + ": Bid/Ask is not available")
-        else:
-            try:
-                for x in bid:
-                    for y in range(9):
-                        n = y+1
-                        if x == f"volume{str(n)}":
-                            if bid[x] != "-":
-                                bids.append(int(bid[x]))
-                total_bids = sum(bids)
-            
-                for x in ask:
-                    for y in range(9):
-                        n = y+1
-                        if x == f"volume{str(n)}":
-                            if ask[x] != "-":
-                                asks.append(int(ask[x]))
-                total_asks = sum(asks)
+def execute_open_low(access_token, access_security_token, symbol):
+    res = stock_info.call(access_token, symbol, proxies)
+    if res.status_code == 200:
+        try:
+            data = res.json()
+            if data == None:
+                print(symbol + ": No data")
+            else:
+                symbol = data["data"]["symbol"]
+                open = data["data"]["open"]
+                low = data["data"]["low"]
+                value = data["data"]["value"]
+                freq = data["data"]["frequency"]
+                change = data["data"]["percentage_change"]
 
-                if open == low and total_bids > total_asks and open > prev and value > 1_000_000_000:
-                    write_to_csv.call(symbol, today, prev, open, low, value, change)
-                    buy_price = ask["price1"]
-                    # amount = 1_000_000
-                    # shares = floor(( amount / float(buy_price)))
-                    shares = 100
-                    if enable_buy == 1: send_buy_order(access_security_token, symbol, buy_price, shares)
-                    time.sleep(180) # delay 3 minutes
-                    if enable_sell == 1: send_sell_order(access_security_token, symbol, ask["price1"])
-            except:
-                print("Error is here: " + symbol)
-                print("Error traceback:")
-                print(traceback.format_exc())
-                print("Response data:")
-                print(data["data"])
+                bids = []
+                asks = []
+                bid = data["data"]["bid"]
+                ask = data["data"]["offer"]
+                
+                if bid is None or ask is None:
+                    print(symbol + ": Bid/Ask is empty")
+                else:
+                    for x in bid:
+                        for y in range(9):
+                            n = y+1
+                            if x == f"volume{str(n)}":
+                                if bid[x] != "-":
+                                    bids.append(int(bid[x]))
+                    total_bids = sum(bids)
+                
+                    for x in ask:
+                        for y in range(9):
+                            n = y+1
+                            if x == f"volume{str(n)}":
+                                if ask[x] != "-":
+                                    asks.append(int(ask[x]))
+                    total_asks = sum(asks)
+
+                    # Get prev low
+                    for data in prev_list:
+                        prev_symbol = data[0]
+                        prev_date = data[1]
+                        if symbol == prev_symbol and yesterday == prev_date:
+                            prev_low = int(data[2].replace('.0', ''))
+                            if (
+                                    open == low and total_bids > total_asks and 
+                                    low > prev_low and value > 100_000_000
+                                ):
+                                save_result(symbol, today, open, low, prev_low, value, freq, change)
+                                buy_price = ask["price1"]
+                                # amount = 1_000_000
+                                # shares = floor(( amount / float(buy_price)))
+                                shares = 100
+                                if enable_buy == 1: 
+                                    send_buy_order(access_security_token, symbol, buy_price, shares)
+
+                    print(symbol + ": done")
+        except:
+            save_failed(symbol)
+            print(symbol + ": Exception error")
+            print("Error traceback:")
+            print(traceback.format_exc())
+            print("Response data:")
+            print(data)
     else:
-        print("HTTP error")
+        print(symbol + ": HTTP error")
         print(res.text)
+
+def save_result(symbol, date, o, l, prev_low, value, freq, change):
+    with open('open_low_result.csv', 'a', newline='', encoding='utf-8') as f:
+        writer = csv.writer(f) #this is the writer object
+        writer.writerow([symbol, date, o, l, prev_low, value, freq, change]) #this is the data
+        f.close()
+
+def save_failed(symbol):
+    with open('failed.csv', 'a', newline='', encoding='utf-8') as f:
+        writer = csv.writer(f) #this is the writer object
+        writer.writerow([symbol]) #this is the data
+        f.close()
+
+def executor_submit(executor, access_token, access_security_token):
+    return {executor.submit(execute_open_low, access_token, access_security_token, symbol): symbol for symbol in stock_all.list}
 
 def async_screening(access_token, access_security_token):
     with ThreadPoolExecutor(max_workers=10) as executor:
-        future_to_user = executor_submit(access_token, access_security_token, executor)
+        future_to_user = executor_submit(executor, access_token, access_security_token)
         for future in concurrent.futures.as_completed(future_to_user):
             try:
                 if future.result() != None:
@@ -138,26 +205,45 @@ def async_screening(access_token, access_security_token):
                 print(error)
                 print(traceback.format_exc())
 
-def executor_submit(access_token, executor):
-        return {executor.submit(execute_open_low, access_token, access_security_token, symbol): symbol for symbol in stock_all.list}
-
 if __name__ == '__main__':
+    print("Start strategy: open == low")
     t1 = time.time()
-    res = login.call(email, password)
+    try: os.remove("open_low_result.csv") 
+    except: print("Cleaning open_low_result.csv: File doesn't exist")
+    print("Using proxies: " + proxies["http"])
+
+    get_prev_data()
+
+    res = login.call(email, password, proxies)
     if res.status_code == 200:
         data = res.json()
         access_token = "Bearer " + data["data"]["access_token"]
-        res = get_security_token.call(access_token)
+        res = get_security_token.call(access_token, proxies)
         if res.status_code == 200:
             data = res.json()
-            res = login_security.call(pin, data["data"]["token"])
+            res = login_security.call(pin, data["data"]["token"], proxies)
             if res.status_code == 200:
                 data = res.json()
                 access_security_token = "Bearer " + data["data"]["access_token"]
-                # async_screening(access_token, access_security_token)
-                # execute_open_low(access_token, access_security_token, "SAME")
+                print("Login to Stockbit success")
+
+                async_screening(access_token, access_security_token)
+
+                if enable_sell == 1:
+                    time.sleep(180)
+                    path = "open_low_result.csv"
+                    with open(path, "r") as file:
+                        csvreader = csv.reader(file)
+                        if is_empty_csv(path) == False:
+                            for row in csvreader:
+                                symbol = row[0]
+                                ask_price = int(row[7])
+                                send_sell_order(access_security_token, symbol, ask_price)
+                        file.close()
+
+                # execute_open_low(access_token, access_security_token, "ACST")
                 # send_buy_order(access_security_token, "GOTO", 80, 100)
-                send_sell_order(access_security_token, "GOTO", 95)
+                # send_sell_order(access_security_token, "GOTO", 95)
             else:
                 print("HTTP error: login_security")
                 print(res.text)
@@ -170,4 +256,4 @@ if __name__ == '__main__':
 
     t2 = time.time()
     diff = t2 -t1
-    print("Elapsed times: " + str(round(diff, 2)))
+    print(f"Elapsed times: {str(round(diff, 2))} seconds.")

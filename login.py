@@ -1,13 +1,13 @@
 import requests
 
-def call(email, password):
+def call(email, password, proxies):
     try:
         url = f"https://api.stockbit.com/v2.4/login?user={email}&password={password}"
 
         payload={}
         headers = {}
-
-        response = requests.request("POST", url, headers=headers, data=payload)
+        breakpoint()
+        response = requests.request("POST", url, headers=headers, data=payload, proxies=proxies)
 
         return response
     except requests.exceptions.HTTPError as errh:

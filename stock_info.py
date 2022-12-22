@@ -1,6 +1,6 @@
 import requests
 
-def call(access_token, stock):
+def call(access_token, stock, proxies):
     try:
         url = f"https://exodus.stockbit.com/orderbook/companies/{stock}"
 
@@ -22,7 +22,7 @@ def call(access_token, stock):
             'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36'
         }
 
-        response = requests.request("GET", url, headers=headers, data=payload)
+        response = requests.request("GET", url, headers=headers, data=payload, proxies=proxies)
     
         return response
     except requests.exceptions.HTTPError as errh:

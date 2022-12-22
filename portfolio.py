@@ -1,6 +1,6 @@
 import requests
 
-def call(access_security_token):
+def call(access_security_token, proxies):
     try:
         url = "https://trading.masonline.id/portfolio"
 
@@ -22,7 +22,7 @@ def call(access_security_token):
         'sec-ch-ua-platform': '"macOS"'
         }
 
-        response = requests.request("GET", url, headers=headers, data=payload)
+        response = requests.request("GET", url, headers=headers, data=payload, proxies=proxies)
 
         return response
     except requests.exceptions.HTTPError as errh:

@@ -1,6 +1,6 @@
 import requests
 
-def call(pin, security_token):
+def call(pin, security_token, proxies):
     try:
         url = "https://trading.masonline.id/auth/pin"
 
@@ -23,7 +23,7 @@ def call(pin, security_token):
             'sec-ch-ua-platform': '"macOS"'
         }
 
-        response = requests.request("POST", url, headers=headers, data=payload)
+        response = requests.request("POST", url, headers=headers, data=payload, proxies=proxies)
 
         return response
     except requests.exceptions.HTTPError as errh:
