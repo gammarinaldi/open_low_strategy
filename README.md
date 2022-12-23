@@ -1,9 +1,9 @@
 # Open Low Strategy
 
 Pre-requisite:
-- Punya akun stockbit sekuritas
+- Punya akun Stockbit Sekuritas
 - Buat file `users.py` dan isi dengan format: `list = ["email", "password", "pin"]`
-- Buat task scheduler yg akan menjalankan sistem pada jam 09:01
+- Buat task scheduler yg akan menjalankan aplikasi ini pada jam 09:01
 
 How it works:
 - Sistem akan melakukan scanning market jam 09:01 WIB
