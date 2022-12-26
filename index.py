@@ -32,7 +32,6 @@ enable_buy = 0
 enable_sell = 0
 
 today = date.today()
-yesterday = (today - timedelta(days=1)).strftime('%Y-%m-%d')
 email = users.list[0]
 password = users.list[1]
 pin = users.list[2]
@@ -151,6 +150,10 @@ def execute_open_low(access_token, access_security_token, symbol):
                     for data in prev_list:
                         prev_symbol = data[0]
                         prev_date = data[1]
+                        d = 3 if today.strftime('%A') == 'Monday' else 1
+                        date = today - timedelta(days=d)
+                        yesterday = date.strftime('%Y-%m-%d')
+                        
                         if symbol == prev_symbol and yesterday == prev_date:
                             prev_low = int(data[2].replace('.0', ''))
                             if (
@@ -171,9 +174,9 @@ def execute_open_low(access_token, access_security_token, symbol):
             print(res.text)
     except:
             save_failed(symbol)
-            print(symbol + ": Exception error")
-            print("Error traceback:")
-            print(traceback.format_exc())
+            # print(symbol + ": Exception error")
+            # print("Error traceback:")
+            # print(traceback.format_exc())
             print("Response:")
             print(res)
 
@@ -226,7 +229,7 @@ if __name__ == '__main__':
                 print("Login to Stockbit success")
 
                 async_screening(access_token, access_security_token)
-                # execute_open_low(access_token, access_security_token, "JTPE")
+                # execute_open_low(access_token, access_security_token, "GOTO")
                 # send_buy_order(access_security_token, "GOTO", 80, 100)
                 # send_sell_order(access_security_token, "GOTO", 95)
 
