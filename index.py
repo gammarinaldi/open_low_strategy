@@ -14,6 +14,7 @@ import csv
 import os
 import requests
 import json
+import telegram
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, timedelta
 from math import floor
@@ -21,6 +22,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+dir_path = os.getenv('DIR_PATH')
 params = dict(apiKey=os.getenv('PROXY_ROTATOR_KEY'))
 resp = requests.get(url=os.getenv('PROXY_ROTATOR_URL'), params=params)
 resp_text = json.loads(resp.text)
@@ -36,7 +38,30 @@ email = users.list[0]
 password = users.list[1]
 pin = users.list[2]
 
-prev_list = []    
+prev_list = []
+log_list = []
+
+def get_tele_data():
+    load_dotenv()
+    tele_bot_token = os.getenv('TELEGRAM_BOT_TOKEN')
+    tele_log_id = os.getenv('TELEGRAM_LOGGER_ID')
+
+    return tele_bot_token, tele_log_id
+
+def get_tele_bot():
+    tele_bot_token, tele_log_id = get_tele_data()
+    bot = telegram.Bot(token=tele_bot_token)
+    return bot, tele_log_id
+
+def send_log():
+    bot, tele_log_id = get_tele_bot()
+    bot.send_message(chat_id=tele_log_id, text=join_msg(log_list))
+
+def join_msg(list):
+    if list:
+        return '\n'.join(list)
+    else:
+        return "Message is empty"
 
 def tick(price):
     if price <= 200: 
@@ -56,9 +81,13 @@ def send_buy_order(access_security_token, symbol, buy_price, shares):
         data = res.json()
         msg = data["message"]
         order_id = data["data"]["orderid"]
-        print(f"{symbol}: {msg} with order id: {order_id}")
+        event = f"{symbol}: {msg} with order id: {order_id} sent"
+        log_list.append(event)
+        print(event)
     else:
-        print("HTTP error: buy")
+        event = symbol + ": HTTP error: buy"
+        log_list.append(event)
+        print(event)
         print(res.text)
 
 def send_sell_order(access_security_token, symbol, ask_price):
@@ -75,14 +104,22 @@ def send_sell_order(access_security_token, symbol, ask_price):
                 data = res.json()
                 msg = data["message"]
                 order_id = data["data"]["orderid"]
-                print(f"{symbol}: {msg} with order id: {order_id}")
+                event = f"{symbol}: {msg} with order id: {order_id} sent"
+                log_list.append(event)
+                print(event)
             else:
-                print("HTTP error: sell")
+                event = symbol + ": HTTP error: sell"
+                log_list.append(event)
+                print(event)
                 print(res.text)
         else:
-            print(f"{symbol}: not exists in portfolio")
+            event = f"{symbol}: not exists in portfolio"
+            log_list.append(event)
+            print(event)
     else:
-        print("HTTP error: portfolio")
+        event = symbol + ": HTTP error: portfolio"
+        log_list.append(event)
+        print(event)
         print(res.text)
 
 def is_empty_csv(path):
@@ -94,8 +131,11 @@ def is_empty_csv(path):
     return True
 
 def get_prev_data():
-    path = r"C:\Users\Gama\Downloads\GamaTradingSystem\idx_updater_all\merged\result.csv"
-    
+    event = "Load previous market quotes."
+    log_list.append(event)
+    print(event)
+
+    path = f"{dir_path}\\idx_updater_all\\merged\\result.csv"
     with open(path, "r") as file:
         csvreader = csv.reader(file)
         if is_empty_csv(path) == False:
@@ -170,7 +210,9 @@ def execute_open_low(access_token, access_security_token, symbol):
 
                     # print(symbol + ": done")
         else:
-            print(symbol + ": HTTP error")
+            event = symbol + ": HTTP error"
+            log_list.append(event)
+            print(event)
             print(res.text)
     except:
             save_failed(symbol)
@@ -196,6 +238,10 @@ def executor_submit(executor, access_token, access_security_token):
     return {executor.submit(execute_open_low, access_token, access_security_token, symbol): symbol for symbol in stock_all.list}
 
 def async_screening(access_token, access_security_token):
+    event = "Start async screening..."
+    log_list.append(event)
+    print(event)
+
     with ThreadPoolExecutor(max_workers=10) as executor:
         future_to_user = executor_submit(executor, access_token, access_security_token)
         for future in concurrent.futures.as_completed(future_to_user):
@@ -209,9 +255,17 @@ def async_screening(access_token, access_security_token):
                 print(traceback.format_exc())
 
 if __name__ == '__main__':
+    event = "Start strategy: open == low"
+    log_list.append(event)
     print("Start strategy: open == low")
     t1 = time.time()
-    print("Using proxies: " + proxies["http"])
+    event = "Using proxies: " + proxies["http"]
+    log_list.append(event)
+    print(event)
+
+    event = f"Execution settings: buy={enable_buy}, sell={enable_sell}"
+    log_list.append(event)
+    print(event)
 
     get_prev_data()
 
@@ -226,12 +280,18 @@ if __name__ == '__main__':
             if res.status_code == 200:
                 data = res.json()
                 access_security_token = "Bearer " + data["data"]["access_token"]
-                print("Login to Stockbit success")
+                event = "Login to Stockbit success."
+                log_list.append(event)
+                print(event)
 
                 async_screening(access_token, access_security_token)
                 # execute_open_low(access_token, access_security_token, "GOTO")
                 # send_buy_order(access_security_token, "GOTO", 80, 100)
                 # send_sell_order(access_security_token, "GOTO", 95)
+
+                event = "Async screening finish."
+                log_list.append(event)
+                print(event)
 
                 if enable_sell == 1:
                     time.sleep(180)
@@ -245,15 +305,26 @@ if __name__ == '__main__':
                                 send_sell_order(access_security_token, symbol, ask_price)
                         file.close()
             else:
+                event = "HTTP error: login_security"
+                log_list.append(event)
                 print("HTTP error: login_security")
                 print(res.text)
         else:
-            print("HTTP error: get_security_token")
+            event = "HTTP error: get_security_token"
+            log_list.append(event)
+            print(event)
             print(res.text)
     else:
+        event = "HTTP error"
+        log_list.append(event)
         print("HTTP error")
         print(res.text)
 
     t2 = time.time()
     diff = t2 -t1
+    event = f"Elapsed times: {str(round(diff, 2))} seconds."
+    log_list.append(event)
     print(f"Elapsed times: {str(round(diff, 2))} seconds.")
+
+    send_log()
+    
