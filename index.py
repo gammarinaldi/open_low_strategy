@@ -22,6 +22,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+prev_data_path = os.getenv('PREV_DATA_PATH')
 dir_path = os.getenv('DIR_PATH')
 params = dict(apiKey=os.getenv('PROXY_ROTATOR_KEY'))
 resp = requests.get(url=os.getenv('PROXY_ROTATOR_URL'), params=params)
@@ -135,10 +136,9 @@ def get_prev_data():
     log_list.append(event)
     print(event)
 
-    path = f"{dir_path}\\idx_updater_all\\merged\\result.csv"
-    with open(path, "r") as file:
+    with open(prev_data_path, "r") as file:
         csvreader = csv.reader(file)
-        if is_empty_csv(path) == False:
+        if is_empty_csv(prev_data_path) == False:
             next(csvreader, None) # Skip first row (header)
             for row in csvreader:
                 prev_date = row[1]
@@ -200,6 +200,10 @@ def execute_open_low(access_token, access_security_token, symbol):
                                     open == low and total_bids > total_asks and 
                                     low > prev_low and value > 100_000_000
                                 ):
+                                event = f"{symbol},{today},{open},{low},{prev_low},{value},{freq},{change}"
+                                log_list.append(event)
+                                print(event)
+                                
                                 save_result(symbol, today, open, low, prev_low, value, freq, change)
                                 buy_price = ask["price1"]
                                 # amount = 1_000_000
@@ -223,13 +227,13 @@ def execute_open_low(access_token, access_security_token, symbol):
             print(res)
 
 def save_result(symbol, date, o, l, prev_low, value, freq, change):
-    with open('open_low_result.csv', 'a', newline='', encoding='utf-8') as f:
+    with open(f'{dir_path}\\open_low_result.csv', 'a', newline='', encoding='utf-8') as f:
         writer = csv.writer(f) #this is the writer object
         writer.writerow([symbol, date, o, l, prev_low, value, freq, change]) #this is the data
         f.close()
 
 def save_failed(symbol):
-    with open('failed.csv', 'a', newline='', encoding='utf-8') as f:
+    with open(f'{dir_path}\\failed.csv', 'a', newline='', encoding='utf-8') as f:
         writer = csv.writer(f) #this is the writer object
         writer.writerow([symbol]) #this is the data
         f.close()
