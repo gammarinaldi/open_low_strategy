@@ -141,10 +141,13 @@ def get_prev_data():
         if is_empty_csv(prev_data_path) == False:
             next(csvreader, None) # Skip first row (header)
             for row in csvreader:
-                prev_date = row[1]
-                prev_symbol = row[2]
-                prev_low = row[5]
-                prev_list.append([prev_symbol, prev_date, prev_low])
+                pdate = row[1]
+                psymbol = row[2]
+                popen = row[3]
+                phigh = row[4]
+                plow = row[5]
+                pclose = row[6]
+                prev_list.append([psymbol, pdate, popen, phigh, plow, pclose])
         file.close()
         
 def execute_open_low(access_token, access_security_token, symbol):
@@ -157,7 +160,9 @@ def execute_open_low(access_token, access_security_token, symbol):
             else:
                 symbol = data["data"]["symbol"]
                 open = data["data"]["open"]
+                high = data["data"]["high"]
                 low = data["data"]["low"]
+                close = data["data"]["close"]
                 value = data["data"]["value"]
                 freq = data["data"]["frequency"]
                 change = data["data"]["percentage_change"]
@@ -188,23 +193,30 @@ def execute_open_low(access_token, access_security_token, symbol):
 
                     # Get prev low
                     for data in prev_list:
-                        prev_symbol = data[0]
-                        prev_date = data[1]
+                        psymbol = data[0]
+                        pdate = data[1]
+                        popen = int(data[2].replace('.0', ''))
+                        phigh = int(data[3].replace('.0', ''))
+                        plow = int(data[4].replace('.0', ''))
+                        pclose = int(data[5].replace('.0', ''))
+
                         d = 3 if today.strftime('%A') == 'Monday' else 1
                         date = today - timedelta(days=d)
                         yesterday = date.strftime('%Y-%m-%d')
-                        
-                        if symbol == prev_symbol and yesterday == prev_date:
-                            prev_low = int(data[2].replace('.0', ''))
+                    
+                        if symbol == psymbol and yesterday == pdate:
+                            # open == low and total_bids > total_asks and low > plow and value > 100_000_000
                             if (
-                                    open == low and total_bids > total_asks and 
-                                    low > prev_low and value > 100_000_000
+                                    open == low and 
+                                    total_bids > total_asks and 
+                                    low > plow and 
+                                    value > 100_000_000
                                 ):
-                                event = f"{symbol},{today},{open},{low},{prev_low},{value},{freq},{change}"
+                                event = f"{symbol},{today},{open},{high},{low},{close},{popen},{phigh},{plow},{pclose},{value},{freq},{change}"
                                 log_list.append(event)
                                 print(event)
                                 
-                                save_result(symbol, today, open, low, prev_low, value, freq, change)
+                                save_result(symbol, today, open, high, low, close, popen, phigh, plow, pclose, value, freq, change)
                                 buy_price = ask["price1"]
                                 # amount = 1_000_000
                                 # shares = floor(( amount / float(buy_price)))
@@ -226,10 +238,10 @@ def execute_open_low(access_token, access_security_token, symbol):
             print("Response:")
             print(res)
 
-def save_result(symbol, date, o, l, prev_low, value, freq, change):
+def save_result(symbol, date, o, h, l, c, popen, phigh, plow, pclose, value, freq, change):
     with open(f'{dir_path}\\open_low_result.csv', 'a', newline='', encoding='utf-8') as f:
         writer = csv.writer(f) #this is the writer object
-        writer.writerow([symbol, date, o, l, prev_low, value, freq, change]) #this is the data
+        writer.writerow([symbol, date, o, h, l, c, popen, phigh, plow, pclose, value, freq, change]) #this is the data
         f.close()
 
 def save_failed(symbol):
@@ -289,7 +301,7 @@ if __name__ == '__main__':
                 print(event)
 
                 async_screening(access_token, access_security_token)
-                # execute_open_low(access_token, access_security_token, "GOTO")
+                # execute_open_low(access_token, access_security_token, "BBRI")
                 # send_buy_order(access_security_token, "GOTO", 80, 100)
                 # send_sell_order(access_security_token, "GOTO", 95)
 
