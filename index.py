@@ -217,14 +217,13 @@ def execute_open_low(access_token, access_security_token, symbol):
                                 print(event)
                                 
                                 save_result(symbol, today, open, high, low, close, popen, phigh, plow, pclose, value, freq, change)
-                                buy_price = ask["price1"]
-                                # amount = 1_000_000
-                                # shares = floor(( amount / float(buy_price)))
-                                shares = 100
-                                if enable_buy == 1: 
+                                
+                                if enable_buy == 1:
+                                    buy_price = ask["price1"]
+                                    # amount = 1_000_000
+                                    # shares = floor(( amount / float(buy_price)))
+                                    shares = 100
                                     send_buy_order(access_security_token, symbol, buy_price, shares)
-
-                    # print(symbol + ": done")
         else:
             event = symbol + ": HTTP error"
             log_list.append(event)
